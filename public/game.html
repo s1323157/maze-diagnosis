@@ -7,24 +7,22 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.4.0/p5.min.js"></script>
     <script src="/socket.io/socket.io.js"></script>
     <style>
-        /* カラーパレット定義 */
         :root {
-            --bg-color: #f4ece2;       /* 背景のピンクベージュ */
-            --accent-pink: #d8a8a8;    /* アクセントの濃いピンク */
-            --text-brown: #6d4c41;     /* テキスト用の落ち着いたブラウン */
-            --gold: #c5a572;           /* ゴールド */
+            --bg-color: #f4ece2;
+            --accent-pink: #d8a8a8;
+            --text-brown: #6d4c41;
+            --gold: #c5a572;
         }
 
         body {
             display: flex; justify-content: center; align-items: center;
             height: 100vh; margin: 0;
-            background: linear-gradient(135deg, #fffbf5 0%, #f4ece2 100%); /* 柔らかいグラデーション */
+            background: linear-gradient(135deg, #fffbf5 0%, #f4ece2 100%);
             color: var(--text-brown);
-            font-family: 'Noto Serif JP', serif; /* 基本はセリフ体 */
+            font-family: 'Noto Serif JP', serif;
             overflow: hidden;
         }
 
-        /* 画面全体のクラシックな飾り枠 */
         body::before {
             content: "";
             position: absolute;
@@ -35,30 +33,25 @@
             pointer-events: none;
         }
 
-        /* 結果モーダル */
         #result {
             position: fixed;
             top: 50%; left: 50%;
             transform: translate(-50%, -50%);
-            background: linear-gradient(to bottom, #fffbf5, #f9f1e8); /* カードのような質感 */
+            background: linear-gradient(to bottom, #fffbf5, #f9f1e8);
             padding: 40px 50px;
             display: none;
-            /* 二重線の枠 */
             box-shadow: 
                 0 0 0 1px var(--gold) inset,
                 0 0 0 6px var(--bg-color) inset,
                 0 0 0 7px var(--gold) inset,
-                0 10px 30px rgba(109, 76, 65, 0.2); /* 柔らかい影 */
+                0 10px 30px rgba(109, 76, 65, 0.2);
             width: 80%; max-width: 500px;
             text-align: center;
             border-radius: 4px;
             z-index: 100;
         }
 
-        /* タイトル周り */
-        .title-group {
-            margin-bottom: 20px;
-        }
+        .title-group { margin-bottom: 20px; }
         .sub-title {
             font-family: 'Cinzel', serif;
             font-size: 1.1em;
@@ -67,14 +60,13 @@
             margin-bottom: -5px;
         }
         h2 {
-            font-family: 'Dancing Script', cursive; /* 筆記体 */
+            font-family: 'Dancing Script', cursive;
             font-size: 3.5em;
             color: var(--accent-pink);
             margin: 0;
             text-shadow: 1px 1px 2px rgba(0,0,0,0.05);
         }
 
-        /* 本文エリア */
         #r-desc {
             font-size: 1em;
             line-height: 1.8;
@@ -82,23 +74,21 @@
             margin: 30px 0;
             padding: 10px 20px;
             background: transparent;
-            border-left: 4px solid var(--accent-pink); /* 左側のアクセント線 */
+            border-left: 4px solid var(--accent-pink);
         }
 
-        /* ラッキーアイテムエリア */
         .lucky-box {
             margin-top: 30px;
             padding: 15px;
-            border: 1px dashed var(--gold); /* 点線枠 */
+            border: 1px dashed var(--gold);
             background: transparent;
             position: relative;
         }
-        /* ラッキーアイテムのタイトルを枠線の上に配置 */
         .lucky-label {
             font-family: 'Cinzel', serif;
             font-size: 1em;
             color: var(--text-brown);
-            background: #fffbf5; /* 背景色で線を隠す */
+            background: #fffbf5;
             padding: 0 10px;
             position: absolute;
             top: -12px;
@@ -114,7 +104,6 @@
             font-size: 2.2em;
         }
 
-        /* ボタン */
         button {
             background: linear-gradient(to bottom, var(--accent-pink), #c08a8a);
             color: #fff;
@@ -122,7 +111,7 @@
             padding: 12px 50px;
             margin-top: 30px;
             font-size: 1.1em;
-            border-radius: 50px; /* 楕円形 */
+            border-radius: 50px;
             cursor: pointer;
             font-family: 'Cinzel', serif;
             box-shadow: 0 4px 10px rgba(216, 168, 168, 0.4);
@@ -156,19 +145,13 @@
         let socket = io();
         let player = { x: 1, y: 1 };
         let tilt = { g: 0, b: 0 };
-        let cellSize = 40;
+        let cellSize;
         
-        let maze = [
-            [1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-            [1, 0, 0, 0, 1, 0, 0, 0, 0, 1],
-            [1, 0, 1, 0, 1, 0, 1, 1, 0, 1],
-            [1, 0, 1, 0, 0, 0, 0, 1, 0, 1],
-            [1, 0, 1, 1, 1, 1, 0, 1, 0, 1],
-            [1, 0, 0, 0, 0, 0, 0, 1, 0, 1],
-            [1, 1, 1, 1, 0, 1, 1, 1, 0, 1],
-            [1, 0, 0, 0, 0, 0, 0, 0, 0, 1],
-            [1, 1, 1, 1, 1, 1, 1, 1, 2, 1]
-        ];
+        // ★変更点: 迷路をランダム生成するための変数
+        // 以前よりサイズを大きくしています (奇数にする必要があります)
+        const MAZE_COLS = 15; 
+        const MAZE_ROWS = 13;
+        let maze = [];
 
         let startTime;
         let collisionCount = 0;
@@ -176,7 +159,15 @@
         let isGameover = false;
 
         function setup() {
-            createCanvas(400, 360);
+            // キャンバスサイズを少し大きく設定
+            createCanvas(450, 390);
+            
+            // セルの大きさを自動計算
+            cellSize = width / MAZE_COLS;
+            
+            // ★変更点: 迷路生成関数を呼び出し
+            generateMaze();
+            
             startTime = millis();
 
             socket.emit('join', 'game');
@@ -186,38 +177,73 @@
             });
         }
 
+        // ★追加: 迷路生成アルゴリズム (穴掘り法)
+        function generateMaze() {
+            // 1. 全体を壁(1)で埋める
+            maze = Array(MAZE_ROWS).fill().map(() => Array(MAZE_COLS).fill(1));
+
+            // 2. スタート地点を掘る
+            let startX = 1;
+            let startY = 1;
+            maze[startY][startX] = 0;
+
+            let stack = [{x: startX, y: startY}];
+
+            while(stack.length > 0) {
+                let current = stack[stack.length - 1];
+                let directions = [
+                    {dx: 0, dy: -2}, {dx: 0, dy: 2}, 
+                    {dx: -2, dy: 0}, {dx: 2, dy: 0}
+                ];
+                // 方向をランダムにシャッフル
+                directions.sort(() => Math.random() - 0.5);
+
+                let moved = false;
+                for(let dir of directions) {
+                    let nx = current.x + dir.dx;
+                    let ny = current.y + dir.dy;
+
+                    // 範囲内かつ壁であれば掘り進む
+                    if(nx > 0 && nx < MAZE_COLS - 1 && ny > 0 && ny < MAZE_ROWS - 1 && maze[ny][nx] === 1) {
+                        maze[ny][nx] = 0;
+                        maze[current.y + dir.dy/2][current.x + dir.dx/2] = 0; // 間の壁も壊す
+                        stack.push({x: nx, y: ny});
+                        moved = true;
+                        break;
+                    }
+                }
+                if(!moved) stack.pop(); // 行き止まりなら戻る
+            }
+            
+            // ゴール設定（右下）
+            maze[MAZE_ROWS-2][MAZE_COLS-2] = 2;
+        }
+
         function draw() {
             if (isGameover) return;
             
-            // 背景色：明るいベージュ
             background(244, 236, 226);
-
-            // 発光エフェクトをリセット
             drawingContext.shadowBlur = 0;
 
             // 迷路の描画
-            for (let y = 0; y < maze.length; y++) {
-                for (let x = 0; x < maze[y].length; x++) {
+            for (let y = 0; y < MAZE_ROWS; y++) {
+                for (let x = 0; x < MAZE_COLS; x++) {
                     let px = x * cellSize;
                     let py = y * cellSize;
 
                     if (maze[y][x] === 1) {
-                        // 壁：落ち着いたベージュとゴールドの枠線
                         fill(225, 215, 205);
-                        stroke(197, 165, 114); // ゴールド
+                        stroke(197, 165, 114);
                         strokeWeight(1);
                         rect(px, py, cellSize, cellSize);
                     } else if (maze[y][x] === 2) {
-                        // ゴール：ゴールドの輝き
+                        // ゴール装飾
                         noStroke();
-                        // 外側の光の輪
                         fill(197, 165, 114, 50);
                         circle(px + cellSize/2, py + cellSize/2, cellSize * 0.8);
-                        // 中心のチャーム
                         fill(197, 165, 114);
                         let pulse = sin(frameCount * 0.08) * 2;
                         circle(px + cellSize/2, py + cellSize/2, cellSize * 0.4 + pulse);
-                        // ハイライト（宝石の輝き）
                         fill(255, 255, 255, 200);
                         circle(px + cellSize/2 - 4, py + cellSize/2 - 4, 4);
                     }
@@ -237,40 +263,38 @@
                 
                 if (!isMoving) idleFrameCount += 10;
 
-                if (maze[nextY][nextX] !== 1) {
-                    player.x = nextX;
-                    player.y = nextY;
-                } else {
-                    if (isMoving) {
-                        collisionCount++;
-                        // 衝突時のエフェクト：上品なブラウンのフラッシュ
-                        push();
-                        resetMatrix();
-                        fill(109, 76, 65, 40);
-                        noStroke();
-                        rect(0, 0, width, height);
-                        pop();
+                // 配列の範囲外エラー防止
+                if (nextY >= 0 && nextY < MAZE_ROWS && nextX >= 0 && nextX < MAZE_COLS) {
+                    if (maze[nextY][nextX] !== 1) {
+                        player.x = nextX;
+                        player.y = nextY;
+                    } else {
+                        if (isMoving) {
+                            collisionCount++;
+                            push();
+                            resetMatrix();
+                            fill(109, 76, 65, 40);
+                            noStroke();
+                            rect(0, 0, width, height);
+                            pop();
+                        }
                     }
+                    if (maze[player.y][player.x] === 2) gameClear();
                 }
-                
-                if (maze[player.y][player.x] === 2) gameClear();
             }
 
-            // プレイヤー描画（ピンクパールの輝き）
-            // 上品な影を追加
+            // プレイヤー描画
             drawingContext.shadowColor = 'rgba(109, 76, 65, 0.2)';
             drawingContext.shadowBlur = 8;
-            fill(216, 168, 168); // ピンクベージュ
+            fill(216, 168, 168);
             noStroke();
             circle(player.x * cellSize + cellSize/2, player.y * cellSize + cellSize/2, cellSize * 0.6);
-            // ハイライト
             fill(255, 255, 255, 180);
             circle(player.x * cellSize + cellSize/2 - 5, player.y * cellSize + cellSize/2 - 5, cellSize * 0.2);
 
-
-            // UI（タイム表示）
+            // UI
             drawingContext.shadowBlur = 0;
-            fill(109, 76, 65); // ブラウン文字
+            fill(109, 76, 65);
             textFont('Cinzel');
             textSize(16);
             textAlign(LEFT, TOP);
@@ -282,15 +306,13 @@
             const resultDiv = document.getElementById('result');
             resultDiv.style.display = 'block';
             
-            // ★修正箇所: ここでエラーが出ていました
             resultDiv.style.opacity = 0;
             let opacity = 0;
-            const fadeIn = setInterval(() => { // スペースを削除
+            const fadeIn = setInterval(() => {
                 if (opacity >= 1) clearInterval(fadeIn);
                 resultDiv.style.opacity = opacity;
                 opacity += 0.05;
             }, 20);
-
             
             const playTime = Math.floor((millis() - startTime) / 1000);
             const idleTime = Math.floor(idleFrameCount / 60);
@@ -308,7 +330,6 @@
 
                 const data = await response.json();
                 
-                // タイトルを筆記体に書き換え
                 document.getElementById('r-title').innerText = data.title;
                 document.getElementById('r-desc').innerText = data.description;
                 document.getElementById('r-item').innerText = data.lucky_item;
