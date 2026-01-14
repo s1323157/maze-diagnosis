@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
-    <title>Psycho Maze Labyrinth</title>
+    <title>ココロの迷路 - AI深層心理診断</title>
     <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&family=Dancing+Script:wght@700&family=Noto+Serif+JP:wght@400;700&display=swap" rel="stylesheet">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.4.0/p5.min.js"></script>
     <script src="/socket.io/socket.io.js"></script>
@@ -15,7 +15,7 @@
         }
 
         body {
-            display: flex; justify-content: center; align-items: center;
+            display: flex; flex-direction: column; justify-content: center; align-items: center;
             height: 100vh; margin: 0;
             background: linear-gradient(135deg, #fffbf5 0%, #f4ece2 100%);
             color: var(--text-brown);
@@ -23,6 +23,7 @@
             overflow: hidden;
         }
 
+        /* 画面全体の飾り枠 */
         body::before {
             content: "";
             position: absolute;
@@ -33,6 +34,28 @@
             pointer-events: none;
         }
 
+        /* ゲームタイトル（常時表示） */
+        .main-logo {
+            font-family: 'Noto Serif JP', serif;
+            font-size: 2em;
+            color: var(--text-brown);
+            margin-bottom: 10px;
+            letter-spacing: 0.2em;
+            text-shadow: 2px 2px 0px rgba(255,255,255,0.8);
+            position: relative;
+            z-index: 10;
+        }
+        .main-logo span {
+            font-size: 0.6em;
+            display: block;
+            text-align: center;
+            color: var(--gold);
+            font-family: 'Cinzel', serif;
+            letter-spacing: 0.1em;
+            margin-top: -5px;
+        }
+
+        /* 結果モーダル */
         #result {
             position: fixed;
             top: 50%; left: 50%;
@@ -60,10 +83,10 @@
             margin-bottom: -5px;
         }
         h2 {
-            font-family: 'Dancing Script', cursive;
-            font-size: 3.5em;
-            color: var(--accent-pink);
-            margin: 0;
+            font-family: 'Noto Serif JP', serif; /* 結果タイトルも日本語明朝体に */
+            font-size: 2.5em;
+            color: var(--text-brown);
+            margin: 10px 0;
             text-shadow: 1px 1px 2px rgba(0,0,0,0.05);
         }
 
@@ -100,8 +123,8 @@
             margin-top: 10px;
             font-weight: normal;
             color: var(--gold);
-            font-family: 'Dancing Script', cursive;
-            font-size: 2.2em;
+            font-family: 'Noto Serif JP', serif; /* ラッキーアイテムも日本語対応 */
+            font-size: 1.8em;
         }
 
         button {
@@ -115,7 +138,7 @@
             cursor: pointer;
             font-family: 'Cinzel', serif;
             box-shadow: 0 4px 10px rgba(216, 168, 168, 0.4);
-            transition: transform 0.2s, box-shadow 0.2s, background 0.2s;
+            transition: transform 0.2s, box-shadow 0.2s;
         }
         button:hover {
             background: linear-gradient(to bottom, #c08a8a, var(--accent-pink));
@@ -125,10 +148,15 @@
     </style>
 </head>
 <body>
+    <h1 class="main-logo">
+        ココロの迷路
+        <span>Psycho Maze Labyrinth</span>
+    </h1>
+
     <div id="result">
         <div class="title-group">
-            <span class="sub-title">Result</span>
-            <h2 id="r-title">Analyzing...</h2>
+            <span class="sub-title">Diagnosis Result</span>
+            <h2 id="r-title">診断中...</h2>
         </div>
         
         <p id="r-desc">ただいま、あなたのプレイから深層心理を診断しています...</p>
@@ -147,8 +175,7 @@
         let tilt = { g: 0, b: 0 };
         let cellSize;
         
-        // ★変更点: 迷路をランダム生成するための変数
-        // 以前よりサイズを大きくしています (奇数にする必要があります)
+        // 迷路生成用の設定
         const MAZE_COLS = 15; 
         const MAZE_ROWS = 13;
         let maze = [];
@@ -159,13 +186,9 @@
         let isGameover = false;
 
         function setup() {
-            // キャンバスサイズを少し大きく設定
             createCanvas(450, 390);
-            
-            // セルの大きさを自動計算
             cellSize = width / MAZE_COLS;
             
-            // ★変更点: 迷路生成関数を呼び出し
             generateMaze();
             
             startTime = millis();
@@ -177,45 +200,32 @@
             });
         }
 
-        // ★追加: 迷路生成アルゴリズム (穴掘り法)
         function generateMaze() {
-            // 1. 全体を壁(1)で埋める
             maze = Array(MAZE_ROWS).fill().map(() => Array(MAZE_COLS).fill(1));
-
-            // 2. スタート地点を掘る
             let startX = 1;
             let startY = 1;
             maze[startY][startX] = 0;
-
             let stack = [{x: startX, y: startY}];
 
             while(stack.length > 0) {
                 let current = stack[stack.length - 1];
-                let directions = [
-                    {dx: 0, dy: -2}, {dx: 0, dy: 2}, 
-                    {dx: -2, dy: 0}, {dx: 2, dy: 0}
-                ];
-                // 方向をランダムにシャッフル
+                let directions = [{dx: 0, dy: -2}, {dx: 0, dy: 2}, {dx: -2, dy: 0}, {dx: 2, dy: 0}];
                 directions.sort(() => Math.random() - 0.5);
 
                 let moved = false;
                 for(let dir of directions) {
                     let nx = current.x + dir.dx;
                     let ny = current.y + dir.dy;
-
-                    // 範囲内かつ壁であれば掘り進む
                     if(nx > 0 && nx < MAZE_COLS - 1 && ny > 0 && ny < MAZE_ROWS - 1 && maze[ny][nx] === 1) {
                         maze[ny][nx] = 0;
-                        maze[current.y + dir.dy/2][current.x + dir.dx/2] = 0; // 間の壁も壊す
+                        maze[current.y + dir.dy/2][current.x + dir.dx/2] = 0;
                         stack.push({x: nx, y: ny});
                         moved = true;
                         break;
                     }
                 }
-                if(!moved) stack.pop(); // 行き止まりなら戻る
+                if(!moved) stack.pop();
             }
-            
-            // ゴール設定（右下）
             maze[MAZE_ROWS-2][MAZE_COLS-2] = 2;
         }
 
@@ -225,7 +235,6 @@
             background(244, 236, 226);
             drawingContext.shadowBlur = 0;
 
-            // 迷路の描画
             for (let y = 0; y < MAZE_ROWS; y++) {
                 for (let x = 0; x < MAZE_COLS; x++) {
                     let px = x * cellSize;
@@ -237,7 +246,6 @@
                         strokeWeight(1);
                         rect(px, py, cellSize, cellSize);
                     } else if (maze[y][x] === 2) {
-                        // ゴール装飾
                         noStroke();
                         fill(197, 165, 114, 50);
                         circle(px + cellSize/2, py + cellSize/2, cellSize * 0.8);
@@ -250,7 +258,6 @@
                 }
             }
 
-            // プレイヤーの移動
             if (frameCount % 10 === 0) {
                 let nextX = player.x;
                 let nextY = player.y;
@@ -263,7 +270,6 @@
                 
                 if (!isMoving) idleFrameCount += 10;
 
-                // 配列の範囲外エラー防止
                 if (nextY >= 0 && nextY < MAZE_ROWS && nextX >= 0 && nextX < MAZE_COLS) {
                     if (maze[nextY][nextX] !== 1) {
                         player.x = nextX;
@@ -283,7 +289,6 @@
                 }
             }
 
-            // プレイヤー描画
             drawingContext.shadowColor = 'rgba(109, 76, 65, 0.2)';
             drawingContext.shadowBlur = 8;
             fill(216, 168, 168);
@@ -292,7 +297,6 @@
             fill(255, 255, 255, 180);
             circle(player.x * cellSize + cellSize/2 - 5, player.y * cellSize + cellSize/2 - 5, cellSize * 0.2);
 
-            // UI
             drawingContext.shadowBlur = 0;
             fill(109, 76, 65);
             textFont('Cinzel');
