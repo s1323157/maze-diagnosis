@@ -1,55 +1,45 @@
 const express = require('express');
 const path = require('path');
 const fs = require('fs');
+const http = require('http'); 
+const { Server } = require("socket.io"); 
 require('dotenv').config();
 
 const app = express();
+const server = http.createServer(app);
+const io = new Server(server);
 const PORT = process.env.PORT || 8080;
 
 app.use(express.json());
 app.use(express.static('public'));
 
-// 設定をコードで定義
-const PROVIDER = 'openai';  // 'openai' or 'gemini'
-const MODEL = 'gpt-4o-mini';  // OpenAI: 'gpt-4o-mini', Gemini: 'gemini-2.5-flash'
+const PROVIDER = 'openai'; 
+const MODEL = 'gpt-4o-mini';
+
+// ★重要: ここに授業で「口頭で伝えられたAPIキー」を入れてください
+const API_KEY = "s1323157"; 
 
 let promptTemplate;
 try {
     promptTemplate = fs.readFileSync('prompt.md', 'utf8');
 } catch (error) {
-    console.error('Error reading prompt.md:', error);
-    process.exit(1);
+    promptTemplate = "プレイデータ: 時間=${time}, 衝突=${collisions}, 停止=${idle}。性格診断をしてJSONで返して。";
 }
 
-const OPENAI_API_ENDPOINT = 'https://api.openai.com/v1/chat/completions';
-const GEMINI_API_BASE_URL = 'https://generativelanguage.googleapis.com/v1beta/models/';
+// プロキシサーバーのURL
+const OPENAI_API_ENDPOINT = "https://openai-api-proxy-746164391621.us-west1.run.app";
 
-app.post('/api/', async (req, res) => {
+app.post('/api/generate', async (req, res) => {
     try {
-        const { prompt, title = 'Generated Content', ...variables } = req.body;
-
-        // prompt.mdのテンプレート変数を自動置換
-        let finalPrompt = prompt || promptTemplate;
-        
-        // リクエストボディの全てのキーを変数として利用
+        const variables = req.body;
+        let finalPrompt = promptTemplate;
         for (const [key, value] of Object.entries(variables)) {
             const regex = new RegExp(`\\$\\{${key}\\}`, 'g');
             finalPrompt = finalPrompt.replace(regex, value);
         }
 
-        let result;
-        if (PROVIDER === 'openai') {
-            result = await callOpenAI(finalPrompt);
-        } else if (PROVIDER === 'gemini') {
-            result = await callGemini(finalPrompt);
-        } else {
-            return res.status(400).json({ error: 'Invalid provider configuration' });
-        }
-
-        res.json({ 
-            title: title,
-            data: result 
-        });
+        let result = await callOpenAI(finalPrompt);
+        res.json(result); 
 
     } catch (error) {
         console.error('API Error:', error);
@@ -57,93 +47,46 @@ app.post('/api/', async (req, res) => {
     }
 });
 
+// スマホ連携用
+io.on('connection', (socket) => {
+    console.log('ユーザー接続:', socket.id);
+
+    socket.on('join', (room) => {
+        socket.join(room);
+    });
+
+    socket.on('sensor', (data) => {
+        io.to('game').emit('sensor', data);
+    });
+});
+
 async function callOpenAI(prompt) {
-    const apiKey = process.env.OPENAI_API_KEY;
-    if (!apiKey) {
-        throw new Error('OPENAI_API_KEY environment variable is not set');
+    if (!API_KEY || API_KEY.includes("口頭で聞いた")) {
+        throw new Error('API Keyが設定されていません。server.jsを確認してください。');
     }
 
     const response = await fetch(OPENAI_API_ENDPOINT, {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
-            'Authorization': `Bearer ${apiKey}`
+            'Authorization': `Bearer ${API_KEY}`
         },
         body: JSON.stringify({
             model: MODEL,
-            messages: [
-                { role: 'system', content: prompt }
-            ],
-            max_completion_tokens: 2000,
+            messages: [{ role: 'system', content: prompt }],
             response_format: { type: "json_object" }
         })
     });
 
     if (!response.ok) {
         const error = await response.json();
-        throw new Error(error.error?.message || 'OpenAI API error');
+        throw new Error(error.error?.message || 'Proxy API error');
     }
 
     const data = await response.json();
-    const responseText = data.choices[0].message.content;
-    
-    try {
-        const parsedData = JSON.parse(responseText);
-        // Find the first value in the object that is an array
-        const arrayData = Object.values(parsedData).find(Array.isArray);
-        if (!arrayData) {
-            throw new Error('No array found in the LLM response object.');
-        }
-        return arrayData;
-    } catch (parseError) {
-        throw new Error('Failed to parse LLM response: ' + parseError.message);
-    }
+    return JSON.parse(data.choices[0].message.content);
 }
 
-async function callGemini(prompt) {
-    const apiKey = process.env.GEMINI_API_KEY;
-    if (!apiKey) {
-        throw new Error('GEMINI_API_KEY environment variable is not set');
-    }
-
-    const response = await fetch(`${GEMINI_API_BASE_URL}${MODEL}:generateContent?key=${apiKey}`, {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-            contents: [{
-                parts: [{ text: prompt }]
-            }],
-            generationConfig: {
-                maxOutputTokens: 3000,
-                response_mime_type: "application/json"
-            }
-        })
-    });
-
-    if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error?.message || 'Gemini API error');
-    }
-
-    const data = await response.json();
-    const responseText = data.candidates[0].content.parts[0].text;
-    
-    try {
-        const parsedData = JSON.parse(responseText);
-        // Find the first value in the object that is an array
-        const arrayData = Object.values(parsedData).find(Array.isArray);
-        if (!arrayData) {
-            throw new Error('No array found in the LLM response object.');
-        }
-        return arrayData;
-    } catch (parseError) {
-        throw new Error('Failed to parse LLM response: ' + parseError.message);
-    }
-}
-
-app.listen(PORT, () => {
+server.listen(PORT, () => {
     console.log(`Server running on http://localhost:${PORT}`);
-    console.log(`Config: ${PROVIDER} - ${MODEL}`);
 });
